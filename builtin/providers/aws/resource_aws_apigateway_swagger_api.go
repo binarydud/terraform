@@ -16,18 +16,26 @@ func resourceAwsApiGatewaySwaggerAPI() *schema.Resource {
 		Create: resourceAwsApiGatewaySwaggerAPICreate,
 		Read:   resourceAwsApiGatewaySwaggerAPIRead,
 		Delete: resourceAwsApiGatewaySwaggerAPIDelete,
+		Update: resourceAwsApiGatewaySwaggerAPIUpdate,
 
 		Schema: map[string]*schema.Schema{
 			"swagger": &schema.Schema{
 				Type:     schema.TypeString,
 				Required: true,
-				ForceNew: true,
+				ForceNew: false,
 			},
 
 			"failonwarnings": &schema.Schema{
 				Type:     schema.TypeBool,
 				Optional: true,
-				ForceNew: true,
+				ForceNew: false,
+			},
+
+			"updatemode": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: false,
+				Default:  "overwrite",
 			},
 		},
 	}
@@ -56,6 +64,31 @@ func resourceAwsApiGatewaySwaggerAPICreate(d *schema.ResourceData, meta interfac
 	}
 	d.SetId(*res.Id)
 
+	return resourceAwsApiGatewaySwaggerAPIRead(d, meta)
+}
+
+func resourceAwsApiGatewaySwaggerAPIUpdate(d *schema.ResourceData, meta interface{}) error {
+	conn := meta.(*AWSClient).apigateway
+	swagger := d.Get("swagger").(string)
+	mode := d.Get("updatemode").(string)
+	id := aws.String(d.Id())
+	req := &apigateway.PutRestApiInput{
+		Body:      []byte(swagger),
+		Mode:      &mode,
+		RestApiId: id,
+	}
+	if d.Get("failonwarnings") != nil {
+		req.FailOnWarnings = aws.Bool(d.Get("failonwarnings").(bool))
+	}
+	res, err := conn.PutRestApi(req)
+	if err != nil {
+		return err
+	}
+
+	for w := range res.Warnings {
+		log.Printf("[WARN] Swagger import warning: %s", w)
+	}
+	d.SetId(*res.Id)
 	return resourceAwsApiGatewaySwaggerAPIRead(d, meta)
 }
 
